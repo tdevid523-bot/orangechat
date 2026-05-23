@@ -213,6 +213,11 @@ dependencies {
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
 
+    // ktor server (NapCat reverse WS)
+    implementation(libs.ktor.server.websockets)
+    implementation(libs.ktor.server.cio)
+    implementation(libs.ktor.server.core)
+
     // ucrop
     implementation(libs.ucrop)
 
@@ -235,6 +240,7 @@ dependencies {
     // quickie (qrcode scanner)
     implementation(libs.quickie.bundled)
     implementation(libs.barcode.scanning)
+    implementation(libs.text.recognition)
     implementation(libs.androidx.camera.core)
 
     // Room
@@ -271,6 +277,10 @@ dependencies {
 
     // mcp
     implementation(libs.modelcontextprotocol.kotlin.sdk)
+
+    // Shizuku (read other app's data)
+    implementation(libs.shizuku.api)
+    implementation(libs.shizuku.provider)
 
     // jmDNS (mDNS/Bonjour for .local hostname)
     implementation(libs.jmdns)

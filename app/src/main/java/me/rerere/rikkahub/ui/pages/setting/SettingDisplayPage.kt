@@ -1,6 +1,9 @@
 package me.rerere.rikkahub.ui.pages.setting
 
 import android.os.Build
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,8 +12,11 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.ListItem
@@ -23,6 +29,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -31,11 +38,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import java.io.File
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.ChatFontFamily
@@ -371,6 +388,7 @@ fun SettingDisplayPage(vm: SettingVM = koinViewModel()) {
                                                     ChatFontFamily.DEFAULT -> FontFamily.Default
                                                     ChatFontFamily.SERIF -> FontFamily.Serif
                                                     ChatFontFamily.MONOSPACE -> FontFamily.Monospace
+                                                    ChatFontFamily.CUSTOM -> FontFamily.Default
                                                 }
                                             )
                                         }
@@ -407,13 +425,420 @@ fun SettingDisplayPage(vm: SettingVM = koinViewModel()) {
                                                 ChatFontFamily.DEFAULT -> FontFamily.Default
                                                 ChatFontFamily.SERIF -> FontFamily.Serif
                                                 ChatFontFamily.MONOSPACE -> FontFamily.Monospace
+                                                ChatFontFamily.CUSTOM -> FontFamily.Default
                                             }
                                         )
                                     )
                                 }
                             }
                         )
+                        item(
+                            headlineContent = { Text("聊天气泡透明度") },
+                            supportingContent = {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    Slider(
+                                        value = displaySetting.chatBubbleTransparency,
+                                        onValueChange = {
+                                            updateDisplaySetting(displaySetting.copy(chatBubbleTransparency = it))
+                                        },
+                                        valueRange = 0f..100f,
+                                        steps = 19,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Text(text = "${displaySetting.chatBubbleTransparency.toInt()}%")
+                                }
+                            }
+                        )
+                        item(
+                            headlineContent = { Text("思维链透明度") },
+                            supportingContent = {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    Slider(
+                                        value = displaySetting.thinkingChainTransparency,
+                                        onValueChange = {
+                                            updateDisplaySetting(displaySetting.copy(thinkingChainTransparency = it))
+                                        },
+                                        valueRange = 0f..100f,
+                                        steps = 19,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Text(text = "${displaySetting.thinkingChainTransparency.toInt()}%")
+                                }
+                            }
+                        )
                     }
+                }
+            }
+
+            // Custom Font, Input Background, Avatar Frame section
+            item {
+                val context = LocalContext.current
+                val fontDir = remember { File(context.filesDir, "custom_fonts").apply { mkdirs() } }
+                val bgDir = remember { File(context.filesDir, "input_backgrounds").apply { mkdirs() } }
+                // Font picker launcher
+                val fontPickerLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.OpenDocument()
+                ) { uri ->
+                    uri?.let {
+                        val fileName = it.pathSegments?.last()?.substringAfterLast("/") ?: "custom_font"
+                        val destFile = File(fontDir, "custom_font_${System.currentTimeMillis()}.ttf")
+                        context.contentResolver.openInputStream(it)?.use { input ->
+                            destFile.outputStream().use { output -> input.copyTo(output) }
+                        }
+                        updateDisplaySetting(displaySetting.copy(
+                            chatFontFamily = ChatFontFamily.CUSTOM,
+                            customFontPath = destFile.absolutePath
+                        ))
+                    }
+                }
+
+                // Input background picker launcher
+                val bgPickerLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.OpenDocument()
+                ) { uri ->
+                    uri?.let {
+                        val destFile = File(bgDir, "input_bg_${System.currentTimeMillis()}.png")
+                        context.contentResolver.openInputStream(it)?.use { input ->
+                            destFile.outputStream().use { output -> input.copyTo(output) }
+                        }
+                        updateDisplaySetting(displaySetting.copy(inputBackgroundPath = destFile.absolutePath))
+                    }
+                }
+
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    // Custom Font Import
+                    CardGroup(
+                        modifier = Modifier.padding(horizontal = 8.dp),
+                        title = { Text("自定义字体") },
+                    ) {
+                        item(
+                            headlineContent = { Text("导入自定义字体") },
+                            supportingContent = {
+                                Text(
+                                    if (displaySetting.customFontPath.isNotBlank() && File(displaySetting.customFontPath).exists())
+                                        "当前字体: ${File(displaySetting.customFontPath).name}"
+                                    else "支持 .ttf / .otf 字体文件"
+                                )
+                            },
+                            trailingContent = {
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    if (displaySetting.customFontPath.isNotBlank()) {
+                                        TextButton(onClick = {
+                                            File(displaySetting.customFontPath).delete()
+                                            updateDisplaySetting(displaySetting.copy(
+                                                customFontPath = "",
+                                                chatFontFamily = ChatFontFamily.DEFAULT
+                                            ))
+                                        }) { Text("清除") }
+                                    }
+                                    TextButton(onClick = {
+                                        fontPickerLauncher.launch(arrayOf("*/*"))
+                                    }) { Text("选择字体") }
+                                }
+                            },
+                        )
+                        if (displaySetting.customFontPath.isNotBlank() && File(displaySetting.customFontPath).exists()) {
+                            item(
+                                headlineContent = { Text("字体预览") },
+                                supportingContent = {
+                                    val customFont = remember(displaySetting.customFontPath) {
+                                        runCatching { FontFamily(Font(File(displaySetting.customFontPath))) }
+                                            .getOrDefault(FontFamily.Default)
+                                    }
+                                    Text(
+                                        text = "The quick brown fox jumps over the lazy dog. 你好世界！1234567890",
+                                        fontFamily = customFont,
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                }
+                            )
+                        }
+                    }
+
+                    // Input Background
+                    CardGroup(
+                        modifier = Modifier.padding(horizontal = 8.dp),
+                        title = { Text("输入框背景") },
+                    ) {
+                        item(
+                            headlineContent = { Text("自定义输入框背景图") },
+                            supportingContent = {
+                                Text(
+                                    if (displaySetting.inputBackgroundPath.isNotBlank() && File(displaySetting.inputBackgroundPath).exists())
+                                        "当前背景: ${File(displaySetting.inputBackgroundPath).name}"
+                                    else "选择一张图片作为输入框区域背景"
+                                )
+                            },
+                            trailingContent = {
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    if (displaySetting.inputBackgroundPath.isNotBlank()) {
+                                        TextButton(onClick = {
+                                            File(displaySetting.inputBackgroundPath).delete()
+                                            updateDisplaySetting(displaySetting.copy(inputBackgroundPath = ""))
+                                        }) { Text("清除") }
+                                    }
+                                    TextButton(onClick = {
+                                        bgPickerLauncher.launch(arrayOf("image/*"))
+                                    }) { Text("选择图片") }
+                                }
+                            },
+                        )
+                    }
+
+                    // Avatar Frame (QQ-style decoration)
+                    val frameDir = remember { File(context.filesDir, "avatar_frames").apply { mkdirs() } }
+                    val userFramePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+                        uri?.let {
+                            val destFile = File(frameDir, "user_frame_${System.currentTimeMillis()}.png")
+                            context.contentResolver.openInputStream(it)?.use { input ->
+                                destFile.outputStream().use { output -> input.copyTo(output) }
+                            }
+                            updateDisplaySetting(displaySetting.copy(userAvatarFramePath = destFile.absolutePath))
+                        }
+                    }
+                    val aiFramePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+                        uri?.let {
+                            val destFile = File(frameDir, "ai_frame_${System.currentTimeMillis()}.png")
+                            context.contentResolver.openInputStream(it)?.use { input ->
+                                destFile.outputStream().use { output -> input.copyTo(output) }
+                            }
+                            updateDisplaySetting(displaySetting.copy(aiAvatarFramePath = destFile.absolutePath))
+                        }
+                    }
+
+                    CardGroup(
+                        modifier = Modifier.padding(horizontal = 8.dp),
+                        title = { Text("头像挂件") },
+                    ) {
+                        // ===== 用户头像挂件 =====
+                        item(
+                            headlineContent = { Text("用户头像挂件") },
+                            supportingContent = {
+                                if (displaySetting.userAvatarFramePath.isBlank() || !File(displaySetting.userAvatarFramePath).exists()) {
+                                    Text("选择一张图片作为头像装饰框")
+                                }
+                            },
+                            trailingContent = {
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    if (displaySetting.userAvatarFramePath.isNotBlank()) {
+                                        TextButton(onClick = {
+                                            File(displaySetting.userAvatarFramePath).delete()
+                                            updateDisplaySetting(displaySetting.copy(userAvatarFramePath = ""))
+                                        }) { Text("清除") }
+                                    }
+                                    TextButton(onClick = { userFramePicker.launch(arrayOf("image/*")) }) { Text("选择") }
+                                }
+                            },
+                        )
+                        if (displaySetting.userAvatarFramePath.isNotBlank() && File(displaySetting.userAvatarFramePath).exists()) {
+                            val userFrameBitmap = remember(displaySetting.userAvatarFramePath) {
+                                android.graphics.BitmapFactory.decodeFile(displaySetting.userAvatarFramePath)
+                            }
+                            if (userFrameBitmap != null) {
+                                // 实时预览：圆形头像 + 挂件叠加
+                                item(
+                                    headlineContent = { Text("预览") },
+                                    supportingContent = {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(160.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            // 参考圆形头像
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(80.dp)
+                                                    .clip(CircleShape)
+                                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                            )
+                                            // 挂件叠加层
+                                            Box(
+                                                modifier = Modifier
+                                                    .offset(
+                                                        x = displaySetting.userAvatarFrameOffsetX.dp,
+                                                        y = displaySetting.userAvatarFrameOffsetY.dp
+                                                    )
+                                                    .size((80 * displaySetting.userAvatarFrameScale).dp)
+                                            ) {
+                                                Image(
+                                                    bitmap = userFrameBitmap.asImageBitmap(),
+                                                    contentDescription = "用户头像挂件",
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    contentScale = ContentScale.Fit,
+                                                )
+                                            }
+                                        }
+                                    },
+                                )
+                                // 偏移 X
+                                item(
+                                    headlineContent = { Text("偏移 X") },
+                                    supportingContent = {
+                                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Slider(
+                                                value = displaySetting.userAvatarFrameOffsetX,
+                                                onValueChange = { updateDisplaySetting(displaySetting.copy(userAvatarFrameOffsetX = it)) },
+                                                valueRange = -100f..100f,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            Text("${displaySetting.userAvatarFrameOffsetX.toInt()}")
+                                        }
+                                    },
+                                )
+                                // 偏移 Y
+                                item(
+                                    headlineContent = { Text("偏移 Y") },
+                                    supportingContent = {
+                                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Slider(
+                                                value = displaySetting.userAvatarFrameOffsetY,
+                                                onValueChange = { updateDisplaySetting(displaySetting.copy(userAvatarFrameOffsetY = it)) },
+                                                valueRange = -100f..100f,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            Text("${displaySetting.userAvatarFrameOffsetY.toInt()}")
+                                        }
+                                    },
+                                )
+                                // 缩放
+                                item(
+                                    headlineContent = { Text("缩放") },
+                                    supportingContent = {
+                                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Slider(
+                                                value = displaySetting.userAvatarFrameScale,
+                                                onValueChange = { updateDisplaySetting(displaySetting.copy(userAvatarFrameScale = it)) },
+                                                valueRange = 0.5f..2f,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            Text("${(displaySetting.userAvatarFrameScale * 100).toInt()}%")
+                                        }
+                                    },
+                                )
+                            }
+                        }
+
+                        // ===== AI头像挂件 =====
+                        item(
+                            headlineContent = { Text("AI头像挂件") },
+                            supportingContent = {
+                                if (displaySetting.aiAvatarFramePath.isBlank() || !File(displaySetting.aiAvatarFramePath).exists()) {
+                                    Text("选择一张图片作为AI头像装饰框")
+                                }
+                            },
+                            trailingContent = {
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    if (displaySetting.aiAvatarFramePath.isNotBlank()) {
+                                        TextButton(onClick = {
+                                            File(displaySetting.aiAvatarFramePath).delete()
+                                            updateDisplaySetting(displaySetting.copy(aiAvatarFramePath = ""))
+                                        }) { Text("清除") }
+                                    }
+                                    TextButton(onClick = { aiFramePicker.launch(arrayOf("image/*")) }) { Text("选择") }
+                                }
+                            },
+                        )
+                        if (displaySetting.aiAvatarFramePath.isNotBlank() && File(displaySetting.aiAvatarFramePath).exists()) {
+                            val aiFrameBitmap = remember(displaySetting.aiAvatarFramePath) {
+                                android.graphics.BitmapFactory.decodeFile(displaySetting.aiAvatarFramePath)
+                            }
+                            if (aiFrameBitmap != null) {
+                                // 实时预览：圆形头像 + 挂件叠加
+                                item(
+                                    headlineContent = { Text("预览") },
+                                    supportingContent = {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(160.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            // 参考圆形头像
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(80.dp)
+                                                    .clip(CircleShape)
+                                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                            )
+                                            // 挂件叠加层
+                                            Box(
+                                                modifier = Modifier
+                                                    .offset(
+                                                        x = displaySetting.aiAvatarFrameOffsetX.dp,
+                                                        y = displaySetting.aiAvatarFrameOffsetY.dp
+                                                    )
+                                                    .size((80 * displaySetting.aiAvatarFrameScale).dp)
+                                            ) {
+                                                Image(
+                                                    bitmap = aiFrameBitmap.asImageBitmap(),
+                                                    contentDescription = "AI头像挂件",
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    contentScale = ContentScale.Fit,
+                                                )
+                                            }
+                                        }
+                                    },
+                                )
+                                // 偏移 X
+                                item(
+                                    headlineContent = { Text("偏移 X") },
+                                    supportingContent = {
+                                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Slider(
+                                                value = displaySetting.aiAvatarFrameOffsetX,
+                                                onValueChange = { updateDisplaySetting(displaySetting.copy(aiAvatarFrameOffsetX = it)) },
+                                                valueRange = -100f..100f,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            Text("${displaySetting.aiAvatarFrameOffsetX.toInt()}")
+                                        }
+                                    },
+                                )
+                                // 偏移 Y
+                                item(
+                                    headlineContent = { Text("偏移 Y") },
+                                    supportingContent = {
+                                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Slider(
+                                                value = displaySetting.aiAvatarFrameOffsetY,
+                                                onValueChange = { updateDisplaySetting(displaySetting.copy(aiAvatarFrameOffsetY = it)) },
+                                                valueRange = -100f..100f,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            Text("${displaySetting.aiAvatarFrameOffsetY.toInt()}")
+                                        }
+                                    },
+                                )
+                                // 缩放
+                                item(
+                                    headlineContent = { Text("缩放") },
+                                    supportingContent = {
+                                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Slider(
+                                                value = displaySetting.aiAvatarFrameScale,
+                                                onValueChange = { updateDisplaySetting(displaySetting.copy(aiAvatarFrameScale = it)) },
+                                                valueRange = 0.5f..2f,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            Text("${(displaySetting.aiAvatarFrameScale * 100).toInt()}%")
+                                        }
+                                    },
+                                )
+                            }
+                        }
+                    }
+
                 }
             }
 

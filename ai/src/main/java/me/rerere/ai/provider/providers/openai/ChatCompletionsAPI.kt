@@ -473,14 +473,42 @@ class ChatCompletionsAPI(
 
                     // 紧跟 tool 结果消息
                     group.tools.forEach { tool ->
+                        val textOutput = tool.output.filterIsInstance<UIMessagePart.Text>().joinToString("\n") { it.text }
+                        val imageOutput = tool.output.filterIsInstance<UIMessagePart.Image>()
+
                         add(buildJsonObject {
                             put("role", "tool")
                             put("name", tool.toolName)
                             put("tool_call_id", tool.toolCallId)
-                            put(
-                                "content",
-                                tool.output.filterIsInstance<UIMessagePart.Text>().joinToString("\n") { it.text })
+                            put("content", textOutput)
                         })
+
+                        // If tool output contains images, inject a user message with the images
+                        // so the AI model can "see" them (tool result content only supports text)
+                        if (imageOutput.isNotEmpty()) {
+                            add(buildJsonObject {
+                                put("role", "user")
+                                putJsonArray("content") {
+                                    add(buildJsonObject {
+                                        put("type", "text")
+                                        put("text", "[Tool ${tool.toolName} returned an image]")
+                                    })
+                                    imageOutput.forEach { imagePart ->
+                                        add(buildJsonObject {
+                                            imagePart.encodeBase64().onSuccess { encodedImage ->
+                                                put("type", "image_url")
+                                                put("image_url", buildJsonObject {
+                                                    put("url", encodedImage.base64)
+                                                })
+                                            }.onFailure {
+                                                put("type", "text")
+                                                put("text", "[Image encoding failed: ${it.message}]")
+                                            }
+                                        })
+                                    }
+                                }
+                            })
+                        }
                     }
                 }
             }

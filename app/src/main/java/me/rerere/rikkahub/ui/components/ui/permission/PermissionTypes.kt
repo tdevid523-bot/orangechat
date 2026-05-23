@@ -82,3 +82,32 @@ val PermissionLocalNetwork = PermissionInfo(
     usage = { Text(stringResource(R.string.permission_local_network_desc)) },
     required = true
 )
+
+val PermissionAccessFineLocation = PermissionInfo(
+    permission = Manifest.permission.ACCESS_FINE_LOCATION,
+    displayName = { Text("位置权限") },
+    usage = { Text("用于获取您的精确位置信息") },
+    required = true
+)
+
+val PermissionAccessCoarseLocation = PermissionInfo(
+    permission = Manifest.permission.ACCESS_COARSE_LOCATION,
+    displayName = { Text("粗略位置权限") },
+    usage = { Text("用于获取您的粗略位置信息") },
+    required = false
+)
+
+val PermissionAccessBackgroundLocation = PermissionInfo(
+    permission = Manifest.permission.ACCESS_BACKGROUND_LOCATION,
+    displayName = { Text("后台位置权限") },
+    usage = { Text("允许应用在后台获取位置信息，用于定时同步位置数据到Supabase") },
+    required = false
+)
+
+val PermissionPostNotifications = PermissionInfo(
+    permission = Manifest.permission.POST_NOTIFICATIONS,
+    displayName = { Text("通知权限") },
+    usage = { Text("用于发送通知提醒") },
+    required = false
+)
+

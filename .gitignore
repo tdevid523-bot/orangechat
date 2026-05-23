@@ -11,3 +11,13 @@ local.properties
 .cursor
 .history
 .kotlin
+node_modules/
+.cache/
+dist/
+.next/
+.env
+**/.gradle/
+**/.idea/
+*.class
+*.jar
+!gradle-wrapper.jar

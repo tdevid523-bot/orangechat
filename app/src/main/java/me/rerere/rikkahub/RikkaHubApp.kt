@@ -30,6 +30,8 @@ import me.rerere.rikkahub.di.repositoryModule
 import me.rerere.rikkahub.di.viewModelModule
 import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.datastore.SettingsStore
+import me.rerere.rikkahub.data.service.ProactiveMessageService
+import me.rerere.rikkahub.data.service.SupabaseSyncService
 import me.rerere.rikkahub.service.WebServerService
 import me.rerere.rikkahub.utils.CrashHandler
 import me.rerere.rikkahub.utils.DatabaseUtil
@@ -46,8 +48,14 @@ const val CHAT_LIVE_UPDATE_NOTIFICATION_CHANNEL_ID = "chat_live_update"
 const val WEB_SERVER_NOTIFICATION_CHANNEL_ID = "web_server"
 
 class RikkaHubApp : Application() {
+    companion object {
+        var INSTANCE: RikkaHubApp? = null
+            private set
+    }
+
     override fun onCreate() {
         super.onCreate()
+        INSTANCE = this
         startKoin {
             androidLogger()
             androidContext(this@RikkaHubApp)
@@ -82,6 +90,12 @@ class RikkaHubApp : Application() {
 
         // Start WebServer if enabled in settings
         startWebServerIfEnabled()
+
+        // Reschedule proactive message alarm if enabled
+        rescheduleProactiveMessageIfEnabled()
+
+        // Reschedule Supabase sync alarm if enabled
+        rescheduleSupabaseSyncIfEnabled()
 
         // Increment launch count
         incrementLaunchCount()
@@ -119,6 +133,24 @@ class RikkaHubApp : Application() {
                 Log.e(TAG, "syncManagedFiles failed", it)
             }
         }
+    }
+
+    private fun rescheduleProactiveMessageIfEnabled() {
+        get<AppScope>().launch {
+            runCatching {
+                val settings = get<SettingsStore>().settingsFlowRaw.first()
+                if (settings.proactiveMessageSetting.enabled) {
+                    ProactiveMessageService.scheduleNext(this@RikkaHubApp, settings.proactiveMessageSetting)
+                    Log.i(TAG, "Rescheduled proactive message alarm on app start")
+                }
+            }.onFailure {
+                Log.e(TAG, "rescheduleProactiveMessageIfEnabled failed", it)
+            }
+        }
+    }
+
+    private fun rescheduleSupabaseSyncIfEnabled() {
+        SupabaseSyncService.rescheduleIfEnabled(this)
     }
 
     private fun startWebServerIfEnabled() {

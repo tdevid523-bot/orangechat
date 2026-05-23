@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -42,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEach
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.ArrowDown01
+import me.rerere.rikkahub.ui.context.LocalSettings
 import me.rerere.hugeicons.stroke.ArrowRight01
 import me.rerere.hugeicons.stroke.ArrowUp01
 import me.rerere.hugeicons.stroke.Search01
@@ -76,16 +78,26 @@ fun <T> ChainOfThought(
     collapsedAdaptiveWidth: Boolean = false,
     content: @Composable ChainOfThoughtScope.(T) -> Unit
 ) {
+    val settings = LocalSettings.current
+    val thinkingAlpha = 1f - settings.displaySetting.thinkingChainTransparency / 100f
+
     var expanded by remember { mutableStateOf(false) }
     val canCollapse = steps.size > collapsedVisibleCount
     val shouldFillCollapseControlWidth = expanded || !collapsedAdaptiveWidth
+
+    val effectiveCardColors = CardDefaults.cardColors(
+        containerColor = cardColors.containerColor.copy(alpha = thinkingAlpha),
+        contentColor = cardColors.contentColor,
+        disabledContainerColor = cardColors.disabledContainerColor,
+        disabledContentColor = cardColors.disabledContentColor,
+    )
 
     CompositionLocalProvider(
         LocalCardColor provides cardColors.containerColor
     ) {
         Card(
-            modifier = modifier,
-            colors = cardColors,
+            modifier = modifier.graphicsLayer { alpha = thinkingAlpha },
+            colors = effectiveCardColors,
             shape = RoundedCornerShape(16.dp),
         ) {
             Column(

@@ -641,6 +641,35 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
                             group.tools.forEach { add(it.toFunctionResponsePart()) }
                         }
                     })
+
+                    // If any tool output contains images, inject a user message with the images
+                    val toolImages = group.tools.flatMap { tool ->
+                        tool.output.filterIsInstance<UIMessagePart.Image>().map { imagePart ->
+                            tool.toolName to imagePart
+                        }
+                    }
+                    if (toolImages.isNotEmpty()) {
+                        add(buildJsonObject {
+                            put("role", "user")
+                            putJsonArray("parts") {
+                                add(buildJsonObject {
+                                    put("text", toolImages.joinToString(", ") { "[Tool ${it.first} returned an image]" })
+                                })
+                                toolImages.forEach { (_, imagePart) ->
+                                    add(buildJsonObject {
+                                        imagePart.encodeBase64(false).getOrNull()?.let { encoded ->
+                                            put("inlineData", buildJsonObject {
+                                                put("mimeType", encoded.mimeType)
+                                                put("data", encoded.base64)
+                                            })
+                                        } ?: run {
+                                            put("text", "[Image encoding failed]")
+                                        }
+                                    })
+                                }
+                            }
+                        })
+                    }
                 }
             }
         }

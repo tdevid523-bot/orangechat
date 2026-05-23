@@ -41,6 +41,7 @@ import me.rerere.rikkahub.data.model.PromptInjection
 import me.rerere.rikkahub.data.model.QuickMessage
 import me.rerere.rikkahub.data.model.Tag
 import me.rerere.rikkahub.data.sync.s3.S3Config
+import me.rerere.rikkahub.data.datastore.SystemToolsSetting
 import me.rerere.rikkahub.ui.theme.PresetThemes
 import me.rerere.rikkahub.utils.JsonInstant
 import me.rerere.rikkahub.utils.toMutableStateFlow
@@ -145,6 +146,9 @@ class SettingsStore(
 
         // 赞助提醒
         val SPONSOR_ALERT_DISMISSED_AT = intPreferencesKey("sponsor_alert_dismissed_at")
+
+        // 系统工具设置
+        val SYSTEM_TOOLS_SETTING = stringPreferencesKey("system_tools_setting")
     }
 
     private val dataStore = context.settingsStore
@@ -234,6 +238,9 @@ class SettingsStore(
                 } ?: BackupReminderConfig(),
                 launchCount = preferences[LAUNCH_COUNT] ?: 0,
                 sponsorAlertDismissedAt = preferences[SPONSOR_ALERT_DISMISSED_AT] ?: 0,
+                systemToolsSetting = preferences[SYSTEM_TOOLS_SETTING]?.let {
+                    JsonInstant.decodeFromString(it)
+                } ?: SystemToolsSetting(),
             )
         }
         .map {
@@ -395,6 +402,7 @@ class SettingsStore(
             preferences[BACKUP_REMINDER_CONFIG] = JsonInstant.encodeToString(settings.backupReminderConfig)
             preferences[LAUNCH_COUNT] = settings.launchCount
             preferences[SPONSOR_ALERT_DISMISSED_AT] = settings.sponsorAlertDismissedAt
+            preferences[SYSTEM_TOOLS_SETTING] = JsonInstant.encodeToString(settings.systemToolsSetting)
         }
     }
 
@@ -522,6 +530,8 @@ data class Settings(
     val backupReminderConfig: BackupReminderConfig = BackupReminderConfig(),
     val launchCount: Int = 0,
     val sponsorAlertDismissedAt: Int = 0,
+    val systemToolsSetting: SystemToolsSetting = SystemToolsSetting(),
+    val proactiveMessageSetting: ProactiveMessageSetting = ProactiveMessageSetting(),
 ) {
     companion object {
         // 构造一个用于初始化的settings, 但它不能用于保存，防止使用初始值存储
@@ -537,6 +547,8 @@ enum class ChatFontFamily {
     SERIF,
     @SerialName("monospace")
     MONOSPACE,
+    @SerialName("custom")
+    CUSTOM,
 }
 
 @Serializable
@@ -574,6 +586,24 @@ data class DisplaySetting(
     val chatFontFamily: ChatFontFamily = ChatFontFamily.DEFAULT,
     val enableVolumeKeyScroll: Boolean = false,
     val volumeKeyScrollRatio: Float = 1.0f,
+    val chatBubbleTransparency: Float = 0f,
+    val thinkingChainTransparency: Float = 0f,
+    // 自定义字体
+    val customFontPath: String = "",
+    // 输入框自定义背景
+    val inputBackgroundPath: String = "",
+    // 头像框（QQ挂件风格）
+    val userAvatarFramePath: String = "",
+    val aiAvatarFramePath: String = "",
+    val userAvatarFrameOffsetX: Float = 0f,
+    val userAvatarFrameOffsetY: Float = 0f,
+    val userAvatarFrameScale: Float = 1f,
+    val aiAvatarFrameOffsetX: Float = 0f,
+    val aiAvatarFrameOffsetY: Float = 0f,
+    val aiAvatarFrameScale: Float = 1f,
+    // 思维链和气泡透明度
+    val chainOfThoughtAlpha: Float = 1f,
+    val messageBubbleAlpha: Float = 1f,
 )
 
 @Serializable

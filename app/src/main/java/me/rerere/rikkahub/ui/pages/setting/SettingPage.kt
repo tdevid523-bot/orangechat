@@ -55,8 +55,10 @@ import me.rerere.hugeicons.stroke.LookTop
 import me.rerere.hugeicons.stroke.McpServer
 import me.rerere.hugeicons.stroke.Megaphone01
 import me.rerere.hugeicons.stroke.Package
+import me.rerere.hugeicons.stroke.Pulse01
 import me.rerere.hugeicons.stroke.ServerStack01
 import me.rerere.hugeicons.stroke.Settings03
+import me.rerere.hugeicons.stroke.SmartPhone01
 import me.rerere.hugeicons.stroke.Share04
 import me.rerere.hugeicons.stroke.Sun01
 import me.rerere.hugeicons.stroke.WavingHand01
@@ -124,15 +126,6 @@ fun SettingPage(vm: SettingVM = koinViewModel()) {
                 },
                 scrollBehavior = scrollBehavior,
                 actions = {
-                    if(settings.developerMode) {
-                        IconButton(
-                            onClick = {
-                                navController.navigate(Screen.Developer)
-                            }
-                        ) {
-                            Icon(HugeIcons.Developer, "Developer")
-                        }
-                    }
                 },
                 colors = CustomColors.topBarColors
             )
@@ -250,6 +243,24 @@ fun SettingPage(vm: SettingVM = koinViewModel()) {
                         leadingContent = { Icon(HugeIcons.ServerStack01, null) },
                         supportingContent = { Text(stringResource(R.string.setting_page_web_server_desc)) },
                         headlineContent = { Text(stringResource(R.string.setting_page_web_server)) },
+                    )
+                    item(
+                        onClick = { navController.navigate(Screen.SettingSystemTools) },
+                        leadingContent = { Icon(HugeIcons.SmartPhone01, null) },
+                        supportingContent = { Text("位置、通知、日历、闹钟等系统工具") },
+                        headlineContent = { Text("系统工具") },
+                    )
+                    item(
+                        onClick = { navController.navigate(Screen.SettingProactiveMessage) },
+                        leadingContent = { Icon(HugeIcons.WavingHand01, null) },
+                        supportingContent = { Text("AI 在设定间隔内主动发消息，有记忆有上下文") },
+                        headlineContent = { Text("主动消息") },
+                    )
+                    item(
+                        onClick = { navController.navigate(Screen.Health) },
+                        leadingContent = { Icon(HugeIcons.Pulse01, null) },
+                        supportingContent = { Text("Gadgetbridge 健康数据查看") },
+                        headlineContent = { Text("健康数据") },
                     )
                 }
             }

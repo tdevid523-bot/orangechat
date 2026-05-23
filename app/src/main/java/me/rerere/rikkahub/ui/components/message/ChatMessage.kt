@@ -89,6 +89,9 @@ import me.rerere.rikkahub.ui.modifier.shimmer
 import me.rerere.rikkahub.ui.context.LocalSettings
 import me.rerere.rikkahub.ui.theme.extendColors
 import me.rerere.rikkahub.data.datastore.ChatFontFamily
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.Image
 import me.rerere.rikkahub.utils.JsonInstant
 import me.rerere.rikkahub.utils.base64Encode
 import me.rerere.rikkahub.utils.openUrl
@@ -126,6 +129,14 @@ fun ChatMessage(
             ChatFontFamily.DEFAULT -> FontFamily.Default
             ChatFontFamily.SERIF -> FontFamily.Serif
             ChatFontFamily.MONOSPACE -> FontFamily.Monospace
+            ChatFontFamily.CUSTOM -> {
+                val fontPath = settings.customFontPath
+                if (fontPath.isNotBlank() && java.io.File(fontPath).exists()) {
+                    FontFamily(Font(java.io.File(fontPath)))
+                } else {
+                    FontFamily.Default
+                }
+            }
         }
     )
     var showActionsSheet by remember { mutableStateOf(false) }
@@ -275,6 +286,7 @@ private fun MessagePartsBlock(
     // 消息输出HapticFeedback
     val hapticFeedback = LocalHapticFeedback.current
     val settings = LocalSettings.current
+    val bubbleAlpha = 1f - settings.displaySetting.chatBubbleTransparency / 100f
     val partsState by rememberUpdatedState(parts)
 
     val handleClickCitation: (String) -> Unit = remember {
@@ -354,7 +366,7 @@ private fun MessagePartsBlock(
                                 Surface(
                                     modifier = Modifier.animateContentSize(),
                                     shape = RoundedCornerShape(16.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = bubbleAlpha),
                                     onClick = { onUserMessageClick?.invoke() },
                                 ) {
                                     Column(modifier = Modifier.padding(8.dp)) {
@@ -373,7 +385,7 @@ private fun MessagePartsBlock(
                                     Surface(
                                         modifier = Modifier.animateContentSize(),
                                         shape = RoundedCornerShape(16.dp),
-                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = bubbleAlpha),
                                     ) {
                                         Column(modifier = Modifier.padding(8.dp)) {
                                             MarkdownBlock(

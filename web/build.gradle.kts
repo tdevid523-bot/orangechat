@@ -10,7 +10,11 @@ val buildWebUi = tasks.register<Exec>("buildWebUi") {
     description = "Build web-ui and copy its static output into the web module resources."
 
     workingDir = webUiDir.asFile
-    commandLine("pnpm", "run", "build")
+    if (System.getProperty("os.name").lowercase().contains("windows")) {
+        commandLine("cmd", "/c", "pnpm", "run", "build")
+    } else {
+        commandLine("pnpm", "run", "build")
+    }
 
     inputs.files(
         webUiDir.file("package.json"),
@@ -77,6 +81,7 @@ dependencies {
     api(libs.ktor.server.status.pages)
     api(libs.ktor.server.sse)
     api(libs.ktor.server.cio)
+    api(libs.ktor.server.websockets)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

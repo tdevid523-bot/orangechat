@@ -364,13 +364,38 @@ class ResponseAPI(
                             put("name", tool.toolName)
                             put("arguments", tool.input)
                         })
+                        val textOutput = tool.output.filterIsInstance<UIMessagePart.Text>().joinToString("\n") { it.text }
+                        val imageOutput = tool.output.filterIsInstance<UIMessagePart.Image>()
+
                         add(buildJsonObject {
                             put("type", "function_call_output")
                             put("call_id", tool.toolCallId)
-                            put(
-                                "output",
-                                tool.output.filterIsInstance<UIMessagePart.Text>().joinToString("\n") { it.text })
+                            put("output", textOutput)
                         })
+
+                        // If tool output contains images, inject a user message with the images
+                        if (imageOutput.isNotEmpty()) {
+                            add(buildJsonObject {
+                                put("role", "user")
+                                putJsonArray("content") {
+                                    add(buildJsonObject {
+                                        put("type", "input_text")
+                                        put("text", "[Tool ${tool.toolName} returned an image]")
+                                    })
+                                    imageOutput.forEach { imagePart ->
+                                        add(buildJsonObject {
+                                            imagePart.encodeBase64().onSuccess { encodedImage ->
+                                                put("type", "input_image")
+                                                put("image_url", encodedImage.base64)
+                                            }.onFailure {
+                                                put("type", "input_text")
+                                                put("text", "[Image encoding failed: ${it.message}]")
+                                            }
+                                        })
+                                    }
+                                }
+                            })
+                        }
                     }
                 }
             }

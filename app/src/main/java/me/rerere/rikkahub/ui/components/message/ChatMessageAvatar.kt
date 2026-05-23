@@ -1,16 +1,24 @@
 package me.rerere.rikkahub.ui.components.message
 
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import kotlinx.datetime.toJavaLocalDateTime
@@ -24,8 +32,37 @@ import me.rerere.rikkahub.data.model.Avatar
 import me.rerere.rikkahub.ui.components.ui.AutoAIIcon
 import me.rerere.rikkahub.ui.components.ui.UIAvatar
 import me.rerere.rikkahub.ui.context.LocalSettings
-import me.rerere.rikkahub.utils.formatNumber
 import me.rerere.rikkahub.utils.toLocalString
+import java.io.File
+
+@Composable
+private fun AvatarFrameOverlay(
+    framePath: String,
+    offsetX: Float,
+    offsetY: Float,
+    scale: Float,
+    baseSize: Float,
+) {
+    if (framePath.isNotBlank() && File(framePath).exists()) {
+        val context = LocalContext.current
+        val bitmap = remember(framePath) {
+            runCatching {
+                BitmapFactory.decodeFile(framePath)?.asImageBitmap()
+            }.getOrNull()
+        }
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap,
+                contentDescription = "Avatar Frame",
+                modifier = Modifier
+                    .size((baseSize * scale).dp)
+                    .offset(x = offsetX.dp, y = offsetY.dp),
+                contentScale = ContentScale.Fit,
+                alpha = 1f,
+            )
+        }
+    }
+}
 
 @Composable
 fun ChatMessageUserAvatar(
@@ -60,12 +97,21 @@ fun ChatMessageUserAvatar(
                     )
                 }
             }
-            UIAvatar(
-                name = nickname,
-                modifier = Modifier.size(36.dp),
-                value = avatar,
-                loading = false,
-            )
+            Box(contentAlignment = Alignment.Center) {
+                UIAvatar(
+                    name = nickname,
+                    modifier = Modifier.size(36.dp),
+                    value = avatar,
+                    loading = false,
+                )
+                AvatarFrameOverlay(
+                    framePath = settings.displaySetting.userAvatarFramePath,
+                    offsetX = settings.displaySetting.userAvatarFrameOffsetX,
+                    offsetY = settings.displaySetting.userAvatarFrameOffsetY,
+                    scale = settings.displaySetting.userAvatarFrameScale,
+                    baseSize = 36f,
+                )
+            }
         }
     }
 }
@@ -89,12 +135,21 @@ fun ChatMessageAssistantAvatar(
         ) {
             if (useAssistantAvatar) {
                 if (showIcon) {
-                    UIAvatar(
-                        name = assistant.name,
-                        modifier = Modifier.size(32.dp),
-                        value = assistant.avatar,
-                        loading = loading,
-                    )
+                    Box(contentAlignment = Alignment.Center) {
+                        UIAvatar(
+                            name = assistant.name,
+                            modifier = Modifier.size(32.dp),
+                            value = assistant.avatar,
+                            loading = loading,
+                        )
+                        AvatarFrameOverlay(
+                            framePath = settings.displaySetting.aiAvatarFramePath,
+                            offsetX = settings.displaySetting.aiAvatarFrameOffsetX,
+                            offsetY = settings.displaySetting.aiAvatarFrameOffsetY,
+                            scale = settings.displaySetting.aiAvatarFrameScale,
+                            baseSize = 32f,
+                        )
+                    }
                 }
                 Column(
                     modifier = Modifier.weight(1f)
@@ -117,11 +172,20 @@ fun ChatMessageAssistantAvatar(
                 }
             } else if (model != null) {
                 if (showIcon) {
-                    AutoAIIcon(
-                        name = model.modelId,
-                        modifier = Modifier.size(32.dp),
-                        loading = loading
-                    )
+                    Box(contentAlignment = Alignment.Center) {
+                        AutoAIIcon(
+                            name = model.modelId,
+                            modifier = Modifier.size(32.dp),
+                            loading = loading
+                        )
+                        AvatarFrameOverlay(
+                            framePath = settings.displaySetting.aiAvatarFramePath,
+                            offsetX = settings.displaySetting.aiAvatarFrameOffsetX,
+                            offsetY = settings.displaySetting.aiAvatarFrameOffsetY,
+                            scale = settings.displaySetting.aiAvatarFrameScale,
+                            baseSize = 32f,
+                        )
+                    }
                 }
                 Column(
                     modifier = Modifier.weight(1f)

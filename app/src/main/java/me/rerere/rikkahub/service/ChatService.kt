@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.jsonObject
 import me.rerere.ai.core.MessageRole
 import me.rerere.ai.core.ReasoningLevel
@@ -55,6 +56,7 @@ import me.rerere.rikkahub.data.ai.GenerationChunk
 import me.rerere.rikkahub.data.ai.GenerationHandler
 import me.rerere.rikkahub.data.ai.mcp.McpManager
 import me.rerere.rikkahub.data.ai.tools.LocalTools
+import me.rerere.rikkahub.data.ai.tools.SystemTools
 import me.rerere.rikkahub.data.ai.tools.createSearchTools
 import me.rerere.rikkahub.data.ai.tools.createSkillTools
 import me.rerere.rikkahub.data.files.SkillManager
@@ -305,6 +307,17 @@ class ChatService(
     fun sendMessage(conversationId: Uuid, content: List<UIMessagePart>, answer: Boolean = true) {
         if (content.isEmptyInputMessage()) return
 
+        // 用户发送消息时重置主动消息计时器
+        try {
+            val settings = runBlocking { settingsStore.settingsFlow.first() }
+            val proactiveSetting = settings.proactiveMessageSetting
+            if (proactiveSetting.enabled) {
+                me.rerere.rikkahub.data.service.ProactiveMessageService.resetTimer(context, proactiveSetting)
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("ChatService", "Failed to reset proactive timer", e)
+        }
+
         val session = getOrCreateSession(conversationId)
         session.getJob()?.cancel()
 
@@ -530,6 +543,12 @@ class ChatService(
                         addAll(createSearchTools(settings))
                     }
                     addAll(localTools.getTools(assistant.localTools))
+                    // System tools (location, notifications, calendar, alarm, camera)
+                    val systemToolsOptions = settings.systemToolsSetting.getEnabledOptions()
+                    if (systemToolsOptions.isNotEmpty()) {
+                        val systemTools = SystemTools(context, settings)
+                        addAll(systemTools.getTools(systemToolsOptions))
+                    }
                     if (assistant.enabledSkills.isNotEmpty()) {
                         addAll(
                             createSkillTools(
