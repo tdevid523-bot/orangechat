@@ -25,6 +25,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
@@ -54,6 +55,7 @@ import me.rerere.hugeicons.stroke.Zap
 import me.rerere.rikkahub.data.gadgetbridge.DailySummary
 import me.rerere.rikkahub.data.gadgetbridge.HealthUiState
 import me.rerere.rikkahub.data.gadgetbridge.SleepStage
+import me.rerere.rikkahub.data.gadgetbridge.SleepSummary
 import me.rerere.rikkahub.data.gadgetbridge.StepsRange
 import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.theme.CustomColors
@@ -263,6 +265,12 @@ private fun HealthContent(
         item {
             HeartRateLineChartCard(
                 summaries = state.dailySummaries7,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        item {
+            SleepSummaryCard(
+                summaries = state.sleepSummaries,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -572,7 +580,116 @@ private fun HeartRateLineChart(
     }
 }
 
+// ============ Sleep Summary Card ============
+@Composable
+private fun SleepSummaryCard(
+    summaries: List<SleepSummary>,
+    modifier: Modifier = Modifier,
+) {
+    if (summaries.isEmpty()) return
+
+    Card(modifier = modifier, colors = CustomColors.cardColorsOnSurfaceContainer) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(imageVector = HugeIcons.Alert01, contentDescription = null, modifier = Modifier.size(20.dp), tint = Color(0xFF7E57C2))
+                Text("最近睡眠", style = MaterialTheme.typography.titleMedium)
+            }
+
+            summaries.take(7).forEachIndexed { index, summary ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    val timeFormatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
+                    val startTime = Instant.ofEpochMilli(summary.timestamp)
+                        .atZone(ZoneId.systemDefault()).toLocalTime()
+                        .format(timeFormatter)
+                    val endTime = Instant.ofEpochMilli(summary.wakeupTime)
+                        .atZone(ZoneId.systemDefault()).toLocalTime()
+                        .format(timeFormatter)
+                    val hours = summary.totalDuration / 60
+                    val mins = summary.totalDuration % 60
+
+                    Column {
+                        Text(
+                            if (summary.isNap) "小憩" else "睡眠",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            "$startTime - $endTime",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            "${hours}h ${mins}min",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        if (!summary.isNap && summary.totalDuration > 0) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("深${summary.deepSleep}m", style = MaterialTheme.typography.labelSmall, color = Color(0xFF1565C0))
+                                Text("浅${summary.lightSleep}m", style = MaterialTheme.typography.labelSmall, color = Color(0xFF64B5F6))
+                                Text("REM${summary.remSleep}m", style = MaterialTheme.typography.labelSmall, color = Color(0xFFAB47BC))
+                            }
+                        }
+                    }
+                }
+                if (index < summaries.take(7).size - 1) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
+                }
+            }
+        }
+    }
+}
+
 // ============ Sleep Timeline Card ============
+
+/** 30分钟间隔阈值，用于区分不同睡眠段落 */
+private const val SLEEP_GAP_THRESHOLD_MS = 30 * 60 * 1000L
+
+/** 将连续的睡眠记录按30分钟间隔拆分为多个段落 */
+private fun splitSleepSegments(stages: List<SleepStage>): List<List<SleepStage>> {
+    if (stages.isEmpty()) return emptyList()
+    val segments = mutableListOf<List<SleepStage>>()
+    var currentSegment = mutableListOf(stages.first())
+    for (i in 1 until stages.size) {
+        val gap = stages[i].timestamp - stages[i - 1].timestamp
+        if (gap > SLEEP_GAP_THRESHOLD_MS) {
+            segments.add(currentSegment)
+            currentSegment = mutableListOf()
+        }
+        currentSegment.add(stages[i])
+    }
+    if (currentSegment.isNotEmpty()) segments.add(currentSegment)
+    return segments
+}
+
+/** 计算一个睡眠段落中各阶段的真实时长（毫秒） */
+private fun calcSleepDurationMs(segment: List<SleepStage>): Map<Int, Long> {
+    val durationMap = mutableMapOf<Int, Long>()
+    for (i in segment.indices) {
+        val stageDuration = if (i < segment.size - 1) {
+            segment[i + 1].timestamp - segment[i].timestamp
+        } else {
+            // 最后一条记录无法确定时长，按1分钟估算
+            60_000L
+        }
+        durationMap[segment[i].stage] = (durationMap[segment[i].stage] ?: 0L) + stageDuration
+    }
+    return durationMap
+}
+
+/** 格式化毫秒时长为人类可读字符串 */
+private fun formatDuration(ms: Long): String {
+    val totalMinutes = ms / 60_000
+    val hours = totalMinutes / 60
+    val minutes = totalMinutes % 60
+    return if (hours > 0) "${hours}h${minutes}m" else "${minutes}min"
+}
+
 @Composable
 private fun SleepTimelineCard(
     stages: List<SleepStage>,
@@ -598,19 +715,60 @@ private fun SleepTimelineCard(
                     LegendItem(color = Color(0xFF1565C0), label = "深睡")
                     LegendItem(color = Color(0xFFAB47BC), label = "REM")
                 }
-                SleepTimeline(stages = stages, modifier = Modifier.fillMaxWidth().height(60.dp))
-                // Sleep summary
-                val lightSleep = stages.count { it.stage == 2 }
-                val deepSleep = stages.count { it.stage == 3 }
-                val remSleep = stages.count { it.stage == 4 }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text("浅睡: ${lightSleep}分钟", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("深睡: ${deepSleep}分钟", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("REM: ${remSleep}分钟", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("总计: ${stages.size}分钟", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                val segments = remember(stages) { splitSleepSegments(stages) }
+
+                // Show each sleep segment with its timeline
+                segments.forEachIndexed { index, segment ->
+                    if (segments.size > 1) {
+                        val timeFormatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
+                        val startTime = Instant.ofEpochMilli(segment.first().timestamp)
+                            .atZone(ZoneId.systemDefault()).format(timeFormatter)
+                        val endTime = Instant.ofEpochMilli(segment.last().timestamp)
+                            .atZone(ZoneId.systemDefault()).format(timeFormatter)
+                        Text(
+                            "睡眠段落 ${index + 1}: $startTime - $endTime",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+
+                    SleepTimeline(stages = segment, modifier = Modifier.fillMaxWidth().height(60.dp))
+
+                    // Sleep summary for this segment
+                    val durationMap = remember(segment) { calcSleepDurationMs(segment) }
+                    val totalMs = durationMap.values.sum()
+                    val lightMs = durationMap[2] ?: 0L
+                    val deepMs = durationMap[3] ?: 0L
+                    val remMs = durationMap[4] ?: 0L
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text("浅睡: ${formatDuration(lightMs)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("深睡: ${formatDuration(deepMs)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("REM: ${formatDuration(remMs)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("总计: ${formatDuration(totalMs)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+
+                    // Stage percentage
+                    if (totalMs > 0) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            val lightPct = (lightMs * 100 / totalMs).toInt()
+                            val deepPct = (deepMs * 100 / totalMs).toInt()
+                            val remPct = (remMs * 100 / totalMs).toInt()
+                            Text("浅睡 ${lightPct}%", style = MaterialTheme.typography.labelSmall, color = Color(0xFF42A5F5))
+                            Text("深睡 ${deepPct}%", style = MaterialTheme.typography.labelSmall, color = Color(0xFF1565C0))
+                            Text("REM ${remPct}%", style = MaterialTheme.typography.labelSmall, color = Color(0xFFAB47BC))
+                        }
+                    }
+
+                    if (index < segments.size - 1) {
+                        Spacer(Modifier.height(8.dp))
+                    }
                 }
             }
         }
@@ -666,13 +824,10 @@ private fun SleepTimeline(
         val barHeight = size.height - startLayout.size.height - 8f
         val barWidth = size.width.toFloat()
 
-        stages.forEach { stage ->
+        stages.forEachIndexed { index, stage ->
             val relStart = (stage.timestamp - startTime).toFloat() / totalDuration
-            val relEnd = if (stages.size > 1) {
-                val nextIdx = stages.indexOf(stage) + 1
-                if (nextIdx < stages.size) {
-                    (stages[nextIdx].timestamp - startTime).toFloat() / totalDuration
-                } else 1f
+            val relEnd = if (stages.size > 1 && index < stages.size - 1) {
+                (stages[index + 1].timestamp - startTime).toFloat() / totalDuration
             } else 1f
 
             val color = when (stage.stage) {

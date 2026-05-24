@@ -16,11 +16,14 @@ import kotlinx.datetime.toInstant
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import androidx.core.app.NotificationCompat
+import android.os.Build
 import me.rerere.ai.core.MessageRole
+import me.rerere.ai.core.ReasoningLevel
 import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.ProviderManager
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.ai.provider.TextGenerationParams
+import me.rerere.ai.ui.MessageChunk
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.rikkahub.CHAT_COMPLETED_NOTIFICATION_CHANNEL_ID
@@ -84,11 +87,30 @@ class ProactiveMessageService : KoinComponent {
             )
 
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    triggerTime,
-                    pendingIntent
-                )
+                // Android 12+ needs canScheduleExactAlarms() check
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    if (alarmManager.canScheduleExactAlarms()) {
+                        alarmManager.setExactAndAllowWhileIdle(
+                            AlarmManager.RTC_WAKEUP,
+                            triggerTime,
+                            pendingIntent
+                        )
+                    } else {
+                        // Fallback: use inexact alarm if exact alarm permission not granted
+                        alarmManager.setAndAllowWhileIdle(
+                            AlarmManager.RTC_WAKEUP,
+                            triggerTime,
+                            pendingIntent
+                        )
+                        Log.w(TAG, "Exact alarm permission not granted, using inexact alarm")
+                    }
+                } else {
+                    alarmManager.setExactAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        triggerTime,
+                        pendingIntent
+                    )
+                }
             } else {
                 alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
             }
@@ -232,6 +254,8 @@ class ProactiveMessageService : KoinComponent {
         sb.appendLine("- 不要说\"根据xxx\"、\"我注意到xxx数据\"之类暴露信息来源的话")
         sb.appendLine("- 直接以朋友聊天的语气开口，就像你突然想到了什么想跟对方说")
         sb.appendLine("- 不要使用任何XML标签、思考标记或特殊格式，只输出纯文本的消息内容")
+        sb.appendLine("- 不要调用任何工具或函数，只输出纯文本回复")
+        sb.appendLine("- 不要输出思考过程、推理过程或内部独白，只输出你想对用户说的话")
         return sb.toString()
     }
 
@@ -255,9 +279,10 @@ class ProactiveMessageService : KoinComponent {
 
 class ProactiveMessageReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        Log.d(ProactiveMessageService.TAG, "=== onReceive triggered at ${System.currentTimeMillis()}, action=${intent.action} ===")
         when (intent.action) {
             ProactiveMessageService.ACTION_PROACTIVE_MESSAGE -> {
-                Log.d(ProactiveMessageService.TAG, "Proactive message alarm triggered")
+                Log.d(ProactiveMessageService.TAG, "Starting ProactiveMessageTriggerService...")
                 val serviceIntent = Intent(context, ProactiveMessageTriggerService::class.java)
                 context.startForegroundService(serviceIntent)
             }
@@ -286,7 +311,12 @@ class ProactiveMessageTriggerService : android.app.Service(), KoinComponent {
     private val providerManager: ProviderManager by inject()
     private val proactiveMessageService = ProactiveMessageService()
 
+    companion object {
+        private const val TAG = "ProactiveMessageTrigger"
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d(TAG, "=== TriggerService onStartCommand ===")
         val notification = androidx.core.app.NotificationCompat.Builder(this, CHAT_COMPLETED_NOTIFICATION_CHANNEL_ID)
             .setContentTitle("正在思考...")
             .setSmallIcon(me.rerere.rikkahub.R.drawable.small_icon)
@@ -345,16 +375,19 @@ class ProactiveMessageTriggerService : android.app.Service(), KoinComponent {
                         ))
                     )
                 )
+                // 主动消息场景：不传工具，关闭thinking，只生成纯文本
                 val params = TextGenerationParams(
                     model = model,
-                    temperature = 0.8f
+                    temperature = 0.8f,
+                    tools = emptyList(), // 不带工具，避免工具调用
+                    reasoningLevel = ReasoningLevel.OFF, // 关闭思考链
                 )
 
+                Log.d(TAG, "Calling AI API for proactive message (no tools, reasoning OFF)...")
                 val result = providerImpl.generateText(providerSetting, messages, params)
-                val replyText = result.choices.firstOrNull()?.message?.parts
-                    ?.filterIsInstance<UIMessagePart.Text>()
-                    ?.joinToString("") { it.text }
-                    ?.trim() ?: ""
+                val replyText = extractCleanReply(result)
+
+                Log.d(TAG, "Proactive message generated: '${replyText.take(100)}...' (${replyText.length} chars)")
 
                 if (replyText.isBlank() || replyText.contains("[PASS]")) {
                     // AI 选择跳过，不发通知
@@ -451,6 +484,30 @@ class ProactiveMessageTriggerService : android.app.Service(), KoinComponent {
             contentIntent = pendingIntent
             useBigTextStyle = true
         }
+    }
+
+    /**
+     * 从AI回复中提取纯文本内容，过滤掉思考链(Reasoning)和工具调用(Tool)等部分
+     */
+    private fun extractCleanReply(chunk: MessageChunk): String {
+        val message = chunk.choices.firstOrNull()?.message
+        if (message == null) {
+            Log.w(TAG, "No message in AI response chunk")
+            return ""
+        }
+
+        // 只保留 Text 类型的 parts，过滤掉 Reasoning、Tool、Image 等
+        val textParts = message.parts.filter { part ->
+            part is UIMessagePart.Text
+        }
+
+        val cleanText = textParts
+            .filterIsInstance<UIMessagePart.Text>()
+            .joinToString("\n") { it.text }
+            .trim()
+
+        Log.d(TAG, "Extracted clean reply: ${cleanText.length} chars (filtered from ${message.parts.size} parts)")
+        return cleanText
     }
 
     override fun onBind(intent: Intent?): android.os.IBinder? = null

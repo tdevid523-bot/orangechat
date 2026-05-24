@@ -152,17 +152,69 @@ object GadgetbridgeReader {
         }.getOrDefault(null)
     }
 
+    fun readSleepSummaries(days: Int, customPath: String = ""): List<SleepSummary> {
+        return withDatabase(customPath) { db ->
+            val now = System.currentTimeMillis()
+            val startTime = now - days.toLong() * 24 * 60 * 60 * 1000L
+            val summaries = mutableListOf<SleepSummary>()
+            val cursor = db.query(
+                "XIAOMI_SLEEP_TIME_SAMPLE",
+                arrayOf("TIMESTAMP", "WAKEUP_TIME", "TOTAL_DURATION", "DEEP_SLEEP_DURATION",
+                    "LIGHT_SLEEP_DURATION", "REM_SLEEP_DURATION", "AWAKE_DURATION", "IS_AWAKE"),
+                "TIMESTAMP >= ?",
+                arrayOf(startTime.toString()),
+                null, null, "TIMESTAMP DESC"
+            )
+            cursor.use {
+                while (it.moveToNext()) {
+                    summaries.add(SleepSummary(
+                        timestamp = it.getLong(0),
+                        wakeupTime = it.getLong(1),
+                        totalDuration = it.getInt(2),
+                        deepSleep = it.getInt(3),
+                        lightSleep = it.getInt(4),
+                        remSleep = it.getInt(5),
+                        awakeDuration = it.getInt(6),
+                        isAwake = it.getInt(7) == 1,
+                    ))
+                }
+            }
+            summaries
+        }.getOrDefault(emptyList())
+    }
+
     fun readLastNightSleepStages(customPath: String = ""): List<SleepStage> {
         return withDatabase(customPath) { db ->
-            val now = LocalDate.now()
-            val start = now.minusDays(1).atTime(18, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-            val end = now.atTime(18, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            val now = System.currentTimeMillis()
+            val twoDaysAgo = now - 48 * 60 * 60 * 1000L
             val stages = mutableListOf<SleepStage>()
-            val cursor = db.query("XIAOMI_SLEEP_STAGE_SAMPLE", arrayOf("TIMESTAMP", "STAGE"), "TIMESTAMP >= ? AND TIMESTAMP <= ?", arrayOf(start.toString(), end.toString()), null, null, "TIMESTAMP ASC")
+            val cursor = db.query(
+                "XIAOMI_SLEEP_STAGE_SAMPLE",
+                arrayOf("TIMESTAMP", "STAGE"),
+                "TIMESTAMP >= ? AND STAGE IS NOT NULL",
+                arrayOf(twoDaysAgo.toString()),
+                null, null, "TIMESTAMP ASC"
+            )
             cursor.use {
-                while (it.moveToNext()) { stages.add(SleepStage(it.getLong(0), it.getInt(1))) }
+                while (it.moveToNext()) {
+                    stages.add(SleepStage(it.getLong(0), it.getInt(1)))
+                }
             }
-            stages
+            if (stages.isEmpty()) return@withDatabase emptyList()
+
+            // 按间隔分段（>30分钟视为不同段落），取最近一段
+            val segments = mutableListOf<MutableList<SleepStage>>()
+            var current = mutableListOf(stages[0])
+            for (i in 1 until stages.size) {
+                val gap = stages[i].timestamp - stages[i - 1].timestamp
+                if (gap > 30 * 60 * 1000L) {
+                    segments.add(current)
+                    current = mutableListOf()
+                }
+                current.add(stages[i])
+            }
+            segments.add(current)
+            segments.lastOrNull() ?: emptyList()
         }.getOrDefault(emptyList())
     }
 

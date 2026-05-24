@@ -95,33 +95,113 @@ class ChatCompletionsAPI(
         }
 
         val bodyStr = response.body?.string() ?: ""
-        val bodyJson = json.parseToJsonElement(bodyStr).jsonObject
 
-        // 从 JsonObject 中提取必要的信息
-        val id = bodyJson["id"]?.jsonPrimitive?.contentOrNull ?: ""
-        val model = bodyJson["model"]?.jsonPrimitive?.contentOrNull ?: ""
-        val choice = bodyJson["choices"]?.jsonArray?.get(0)?.jsonObject ?: error("choices is null")
+        // 检测响应是否为 SSE 格式（某些 API 即使 stream=false 也返回 SSE）
+        val isSSE = bodyStr.trimStart().startsWith("data:")
 
-        val message = choice["message"]?.jsonObject ?: throw Exception("message is null")
-        val finishReason = choice["finish_reason"]
-            ?.jsonPrimitive
-            ?.content
-            ?: "unknown"
-        val usage = parseTokenUsage(bodyJson["usage"] as? JsonObject)
+        if (isSSE) {
+            // 解析 SSE 流，合并所有 delta 为完整消息
+            val sseChunks = bodyStr.trim()
+                .lines()
+                .filter { it.startsWith("data:") }
+                .mapNotNull { line ->
+                    val jsonStr = line.removePrefix("data:").trim()
+                    if (jsonStr.isNotBlank() && jsonStr != "[DONE]") {
+                        json.parseToJsonElement(jsonStr).jsonObject
+                    } else null
+                }
 
-        MessageChunk(
-            id = id,
-            model = model,
-            choices = listOf(
-                UIMessageChoice(
-                    index = 0,
-                    delta = null,
-                    message = parseMessage(message),
-                    finishReason = finishReason
-                )
-            ),
-            usage = usage
-        )
+            if (sseChunks.isEmpty()) {
+                throw Exception("No valid data found in SSE response")
+            }
+
+            // 从最后一个有 choices 的 chunk 获取 id、model、usage、finishReason
+            val lastChunk = sseChunks.last()
+            val id = lastChunk["id"]?.jsonPrimitive?.contentOrNull ?: ""
+            val model = lastChunk["model"]?.jsonPrimitive?.contentOrNull ?: ""
+            val finishReason = lastChunk["choices"]
+                ?.jsonArray?.get(0)?.jsonObject
+                ?.get("finish_reason")?.jsonPrimitive?.contentOrNull ?: "unknown"
+            val usage = parseTokenUsage(lastChunk["usage"] as? JsonObject)
+
+            // 合并所有 delta 为完整 message
+            val mergedContent = buildString {
+                for (chunk in sseChunks) {
+                    val delta = chunk["choices"]
+                        ?.jsonArray?.get(0)?.jsonObject
+                        ?.get("delta")?.jsonObject
+                        ?: chunk["choices"]?.jsonArray?.get(0)?.jsonObject
+                            ?.get("message")?.jsonObject
+                        ?: continue
+                    delta["content"]?.jsonPrimitive?.contentOrNull?.let { append(it) }
+                }
+            }
+
+            // 尝试从最后一个 chunk 的 delta 或 message 获取 tool_calls 等其他字段
+            val lastDelta = lastChunk["choices"]
+                ?.jsonArray?.get(0)?.jsonObject
+                ?.get("delta")?.jsonObject
+                ?: lastChunk["choices"]?.jsonArray?.get(0)?.jsonObject
+                    ?.get("message")?.jsonObject
+                ?: buildJsonObject { put("content", mergedContent) }
+
+            // 构建 merged message：用合并后的 content 替换原始 content
+            val mergedMessage = buildJsonObject {
+                for ((key, value) in lastDelta) {
+                    if (key == "content") {
+                        put("content", mergedContent)
+                    } else {
+                        put(key, value)
+                    }
+                }
+                // 如果 lastDelta 没有 content 字段，确保添加
+                if (!lastDelta.containsKey("content")) {
+                    put("content", mergedContent)
+                }
+            }
+
+            MessageChunk(
+                id = id,
+                model = model,
+                choices = listOf(
+                    UIMessageChoice(
+                        index = 0,
+                        delta = null,
+                        message = parseMessage(mergedMessage),
+                        finishReason = finishReason
+                    )
+                ),
+                usage = usage
+            )
+        } else {
+            // 普通 JSON 响应
+            val bodyJson = json.parseToJsonElement(bodyStr).jsonObject
+
+            val id = bodyJson["id"]?.jsonPrimitive?.contentOrNull ?: ""
+            val model = bodyJson["model"]?.jsonPrimitive?.contentOrNull ?: ""
+            val choice = bodyJson["choices"]?.jsonArray?.get(0)?.jsonObject ?: error("choices is null")
+
+            val message = choice["message"]?.jsonObject ?: throw Exception("message is null")
+            val finishReason = choice["finish_reason"]
+                ?.jsonPrimitive
+                ?.content
+                ?: "unknown"
+            val usage = parseTokenUsage(bodyJson["usage"] as? JsonObject)
+
+            MessageChunk(
+                id = id,
+                model = model,
+                choices = listOf(
+                    UIMessageChoice(
+                        index = 0,
+                        delta = null,
+                        message = parseMessage(message),
+                        finishReason = finishReason
+                    )
+                ),
+                usage = usage
+            )
+        }
     }
 
     override suspend fun streamText(

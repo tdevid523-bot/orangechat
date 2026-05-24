@@ -91,13 +91,22 @@ fun createGadgetbridgeTool(customPath: String = ""): Tool = Tool(
                 }
                 "sleep" -> {
                     val stages = GadgetbridgeReader.readLastNightSleepStages(customPath)
+                    // Calculate real duration based on timestamps instead of sample count
+                    val durationByStage = mutableMapOf<Int, Long>()
+                    for (i in stages.indices) {
+                        val stageDuration = if (i < stages.size - 1) {
+                            (stages[i + 1].timestamp - stages[i].timestamp) / 60_000
+                        } else 1L // last record: estimate 1 minute
+                        durationByStage[stages[i].stage] = (durationByStage[stages[i].stage] ?: 0L) + stageDuration
+                    }
+                    val totalMinutes = durationByStage.values.sum()
                     buildJsonObject {
                         put("success", true)
                         put("data_type", "sleep")
-                        put("total_minutes", stages.size)
-                        put("light_sleep_minutes", stages.count { it.stage == 2 })
-                        put("deep_sleep_minutes", stages.count { it.stage == 3 })
-                        put("rem_sleep_minutes", stages.count { it.stage == 4 })
+                        put("total_minutes", totalMinutes)
+                        put("light_sleep_minutes", durationByStage[2] ?: 0L)
+                        put("deep_sleep_minutes", durationByStage[3] ?: 0L)
+                        put("rem_sleep_minutes", durationByStage[4] ?: 0L)
                         put("stages", kotlinx.serialization.json.buildJsonArray {
                             stages.forEach { stage ->
                                 add(buildJsonObject {
@@ -138,6 +147,14 @@ fun createGadgetbridgeTool(customPath: String = ""): Tool = Tool(
                     val sleepStages = GadgetbridgeReader.readLastNightSleepStages(customPath)
                     val (spo2, stress) = GadgetbridgeReader.readLatestSpo2AndStress(customPath)
                     val today = summaries.lastOrNull()
+                    // Sleep - calculate real duration based on timestamps
+                    val sleepDurationByStage = mutableMapOf<Int, Long>()
+                    for (i in sleepStages.indices) {
+                        val stageDuration = if (i < sleepStages.size - 1) {
+                            (sleepStages[i + 1].timestamp - sleepStages[i].timestamp) / 60_000
+                        } else 1L
+                        sleepDurationByStage[sleepStages[i].stage] = (sleepDurationByStage[sleepStages[i].stage] ?: 0L) + stageDuration
+                    }
                     buildJsonObject {
                         put("success", true)
                         put("data_type", "all")
@@ -149,10 +166,10 @@ fun createGadgetbridgeTool(customPath: String = ""): Tool = Tool(
                         put("today_steps", today?.steps ?: 0)
                         put("today_calories", today?.calories ?: 0)
                         // Sleep
-                        put("sleep_total_minutes", sleepStages.size)
-                        put("sleep_light_minutes", sleepStages.count { it.stage == 2 })
-                        put("sleep_deep_minutes", sleepStages.count { it.stage == 3 })
-                        put("sleep_rem_minutes", sleepStages.count { it.stage == 4 })
+                        put("sleep_total_minutes", sleepDurationByStage.values.sum())
+                        put("sleep_light_minutes", sleepDurationByStage[2] ?: 0L)
+                        put("sleep_deep_minutes", sleepDurationByStage[3] ?: 0L)
+                        put("sleep_rem_minutes", sleepDurationByStage[4] ?: 0L)
                         // Weekly summaries
                         put("weekly_summaries", kotlinx.serialization.json.buildJsonArray {
                             summaries.forEach { s ->
