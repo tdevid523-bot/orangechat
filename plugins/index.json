@@ -1,0 +1,12 @@
+[
+  {
+    "id": "com.orangechat.plugin.weather",
+    "name": "天气查询",
+    "description": "查询城市天气和天气预报",
+    "version": "1.0.0",
+    "author": "小橘",
+    "icon": "☁️",
+    "downloadUrl": "https://raw.githubusercontent.com/orangechat/orangechat-plugins/main/weather/weather.op",
+    "size": 2048
+  }
+]
