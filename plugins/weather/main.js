@@ -1,34 +1,56 @@
+var CITY_MAP = {
+    "北京": "101010100", "上海": "101020100", "广州": "101280101",
+    "深圳": "101280601", "福州": "101230101", "杭州": "101210101",
+    "成都": "101270101", "武汉": "101200101", "南京": "101190101",
+    "重庆": "101040100", "天津": "101030100", "西安": "101110101",
+    "长沙": "101250101", "郑州": "101180101", "厦门": "101230201",
+    "合肥": "101220101", "济南": "101120101", "沈阳": "101070101",
+    "哈尔滨": "101050101", "长春": "101060101", "昆明": "101290101",
+    "贵阳": "101260101", "南宁": "101300101", "海口": "101310101",
+    "石家庄": "101090101", "太原": "101100101", "兰州": "101160101",
+    "南昌": "101240101", "苏州": "101190401", "无锡": "101190301",
+    "宁波": "101210401", "大连": "101070201", "青岛": "101120201",
+    "东莞": "101281601", "佛山": "101280800", "珠海": "101280701",
+    "泉州": "101230501", "烟台": "101120501", "温州": "101210701"
+};
+
+function getCityId(cityName) {
+    for (var name in CITY_MAP) {
+        if (cityName.indexOf(name) !== -1 || name.indexOf(cityName) !== -1) {
+            return CITY_MAP[name];
+        }
+    }
+    return null;
+}
+
 async function get_weather(params) {
     var city = params.city;
-    var key = "92fc69699a1b46cb9566395c3b777b3d";
+    var cityId = getCityId(city);
+    if (!cityId) {
+        return { success: false, error: "城市未找到，请输入更完整的城市名" };
+    }
     try {
-        var geoResp = await fetch("https://geoapi.qweather.com/v2/city/lookup?location=" + encodeURIComponent(city) + "&key=" + key);
-        var geoData = await geoResp.json();
-        if (geoData.code !== "200" || !geoData.location || !geoData.location[0]) {
-            return { success: false, error: "城市未找到: " + city };
-        }
-        var loc = geoData.location[0];
-        var locId = loc.id;
-        var cityName = loc.name;
-
-        var resp = await fetch("https://devapi.qweather.com/v7/weather/now?location=" + locId + "&key=" + key);
+        var resp = await fetch("http://t.weather.sojson.com/api/weather/city/" + cityId);
         var data = await resp.json();
-        if (data.code !== "200") {
-            return { success: false, error: "天气查询失败: " + data.code };
+        if (data.status !== 200) {
+            return { success: false, error: "查询失败: " + data.message };
         }
-        var now = data.now;
+        var info = data.cityInfo;
+        var d = data.data;
+        var today = d.forecast[0];
         return {
             success: true,
-            city: cityName,
-            temperature: now.temp + "°C",
-            feelsLike: now.feelsLike + "°C",
-            weather: now.text,
-            windDir: now.windDir,
-            windScale: now.windScale + "级",
-            humidity: now.humidity + "%",
-            pressure: now.pressure + "hPa",
-            visibility: now.vis + "km",
-            updateTime: data.updateTime
+            city: info.city,
+            temperature: d.wendu + "°C",
+            humidity: d.shidu,
+            weather: today.type,
+            wind: today.fx + " " + today.fl,
+            high: today.high,
+            low: today.low,
+            quality: d.quality,
+            sunrise: today.sunrise,
+            sunset: today.sunset,
+            ganmao: d.ganmao
         };
     } catch (e) {
         return { success: false, error: e.message };
@@ -37,42 +59,33 @@ async function get_weather(params) {
 
 async function get_forecast(params) {
     var city = params.city;
-    var days = Math.min(params.days || 3, 3);
-    var key = "92fc69699a1b46cb9566395c3b777b3d";
+    var days = Math.min(params.days || 3, 5);
+    var cityId = getCityId(city);
+    if (!cityId) {
+        return { success: false, error: "城市未找到，请输入更完整的城市名" };
+    }
     try {
-        var geoResp = await fetch("https://geoapi.qweather.com/v2/city/lookup?location=" + encodeURIComponent(city) + "&key=" + key);
-        var geoData = await geoResp.json();
-        if (geoData.code !== "200" || !geoData.location || !geoData.location[0]) {
-            return { success: false, error: "城市未找到: " + city };
-        }
-        var loc = geoData.location[0];
-        var locId = loc.id;
-        var cityName = loc.name;
-
-        var resp = await fetch("https://devapi.qweather.com/v7/weather/3d?location=" + locId + "&key=" + key);
+        var resp = await fetch("http://t.weather.sojson.com/api/weather/city/" + cityId);
         var data = await resp.json();
-        if (data.code !== "200") {
-            return { success: false, error: "预报查询失败: " + data.code };
+        if (data.status !== 200) {
+            return { success: false, error: "查询失败: " + data.message };
         }
+        var info = data.cityInfo;
         var forecast = [];
-        var daily = data.daily;
-        for (var i = 0; i < days && i < daily.length; i++) {
-            var d = daily[i];
+        for (var i = 0; i < days && i < data.data.forecast.length; i++) {
+            var day = data.data.forecast[i];
             forecast.push({
-                date: d.fxDate,
-                temperatureHigh: d.tempMax + "°C",
-                temperatureLow: d.tempMin + "°C",
-                weatherDay: d.textDay,
-                weatherNight: d.textNight,
-                windDirDay: d.windDirDay,
-                windScaleDay: d.windScaleDay + "级",
-                humidity: d.humidity + "%",
-                uvIndex: d.uvIndex,
-                sunrise: d.sunrise,
-                sunset: d.sunset
+                date: day.ymd,
+                week: day.week,
+                weather: day.type,
+                high: day.high,
+                low: day.low,
+                wind: day.fx + " " + day.fl,
+                sunrise: day.sunrise,
+                sunset: day.sunset
             });
         }
-        return { success: true, city: cityName, forecast: forecast };
+        return { success: true, city: info.city, forecast: forecast };
     } catch (e) {
         return { success: false, error: e.message };
     }
