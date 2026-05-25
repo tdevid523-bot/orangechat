@@ -8,7 +8,7 @@
   "entry": "main.js",
   "tools": [
     {
-      "name": "get_weather",。
+      "name": "get_weather",
       "description": "查询城市天气和天气预报（真实数据）",
       "parameters": [
         {"name": "city", "type": "string", "required": true, "description": "城市名"}
@@ -16,7 +16,7 @@
     },
     {
       "name": "get_forecast", 
-      ""description": "查询城市天气和天气预报（真实数据）",
+      "description": "查询城市天气和天气预报（真实数据）",
       "parameter": [
         {"name": "city", "type": "string", "required": true, "description": "城市名"},
         {"name": "days", "type": "integer", "required": false, "description": "预报天数"}
