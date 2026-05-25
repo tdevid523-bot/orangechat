@@ -1,23 +1,23 @@
 {
   "id": "com.orangechat.plugin.weather",
   "name": "天气查询",
-  "description": "查询城市天气和天气预报",
-  "version": "1.0.0",
+  "description": "查询城市天气和天气预报（真实数据）",
+  "version": "1.1.0",
   "author": "小橘",
   "icon": "☁️",
   "entry": "main.js",
   "tools": [
     {
-      "name": "get_weather",
-      "description": "查询指定城市的当前天气",
+      "name": "get_weather",。
+      "description": "查询城市天气和天气预报（真实数据）",
       "parameters": [
         {"name": "city", "type": "string", "required": true, "description": "城市名"}
       ]
     },
     {
       "name": "get_forecast", 
-      "description": "查询指定城市未来几天的天气预报",
-      "parameters": [
+      ""description": "查询城市天气和天气预报（真实数据）",
+      "parameter": [
         {"name": "city", "type": "string", "required": true, "description": "城市名"},
         {"name": "days", "type": "integer", "required": false, "description": "预报天数"}
       ]
