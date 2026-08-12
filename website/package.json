@@ -19,6 +19,10 @@
     "vite": "^8.0.12"
   },
   "dependencies": {
+    "@fontsource/dm-sans": "^5.2.8",
+    "@fontsource/dm-serif-display": "^5.2.8",
+    "@fontsource/dm-serif-text": "^5.2.8",
+    "@fontsource/jetbrains-mono": "^5.2.8",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   }
